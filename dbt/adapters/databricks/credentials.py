@@ -1,5 +1,6 @@
 import itertools
 import json
+import os
 import re
 import threading
 from collections.abc import Iterable
@@ -23,6 +24,11 @@ CATALOG_KEY_IN_SESSION_PROPERTIES = "databricks.catalog"
 DBT_DATABRICKS_INVOCATION_ENV_REGEX = re.compile("^[A-z0-9\\-]+$")
 EXTRACT_CLUSTER_ID_FROM_HTTP_PATH_REGEX = re.compile(r"/?sql/protocolv1/o/\d+/([^?&]+)")
 DBT_DATABRICKS_HTTP_SESSION_HEADERS = "DBT_DATABRICKS_HTTP_SESSION_HEADERS"
+
+DBSQL_METHOD = "dbsql"
+SESSION_METHOD = "session"
+DBT_DATABRICKS_SESSION_MODE_ENV = "DBT_DATABRICKS_SESSION_MODE"
+DATABRICKS_RUNTIME_VERSION_ENV = "DATABRICKS_RUNTIME_VERSION"
 
 REDIRECT_URL = "http://localhost:8020"
 CLIENT_ID = "dbt-databricks"
@@ -96,6 +102,10 @@ class DatabricksCredentials(Credentials):
     connection_parameters: Optional[dict[str, Any]] = None
     auth_type: Optional[str] = None
 
+    # `dbsql` connects through the Databricks SQL connector; `session` runs SQL and Python
+    # models in the SparkSession of the Databricks cluster dbt itself is running on.
+    method: Optional[str] = None
+
     # Path of the file holding the OIDC ID token, for `auth_type: file-oidc`.
     oidc_token_filepath: Optional[str] = None
 
@@ -127,6 +137,8 @@ class DatabricksCredentials(Credentials):
         return data
 
     def __post_init__(self) -> None:
+        self.method = self._resolve_method()
+
         if "." in (self.schema or ""):
             raise DbtValidationError(
                 f"The schema should not contain '.': {self.schema}\n"
@@ -181,12 +193,47 @@ class DatabricksCredentials(Credentials):
         if "_socket_timeout" not in connection_parameters:
             connection_parameters["_socket_timeout"] = 600
         self.connection_parameters = connection_parameters
-        self._credentials_manager = DatabricksCredentialManager.create_from(self)
+        if self.has_api_access:
+            self._credentials_manager = DatabricksCredentialManager.create_from(self)
+
+    def _resolve_method(self) -> str:
+        method = self.method
+        if method is None:
+            if os.getenv(DBT_DATABRICKS_SESSION_MODE_ENV, "").strip().lower() == "true":
+                method = SESSION_METHOD
+            elif os.getenv(DATABRICKS_RUNTIME_VERSION_ENV) and not self.host:
+                method = SESSION_METHOD
+            else:
+                method = DBSQL_METHOD
+        method = method.strip().lower()
+        if method not in (DBSQL_METHOD, SESSION_METHOD):
+            raise DbtValidationError(
+                f"Invalid connection method: `{self.method}`. "
+                f"Must be `{DBSQL_METHOD}` or `{SESSION_METHOD}`."
+            )
+        return method
+
+    @property
+    def is_session_mode(self) -> bool:
+        return self.method == SESSION_METHOD
+
+    @property
+    def has_api_access(self) -> bool:
+        """Whether the Databricks REST API can be used; session mode needs an explicit `host`."""
+        return not self.is_session_mode or bool(self.host)
 
     def validate_creds(self) -> None:
+        if self.is_session_mode:
+            if self.host:
+                self._validate_auth()
+            return
+
         for key in ["host", "http_path"]:
             if not getattr(self, key):
                 raise DbtConfigError(f"The config '{key}' is required to connect to Databricks")
+        self._validate_auth()
+
+    def _validate_auth(self) -> None:
         if not self.token and self.auth_type not in ("oauth", "env-oidc", "file-oidc"):
             raise DbtConfigError(
                 "The config `auth_type` must be one of `oauth`, `env-oidc`, or `file-oidc` "
@@ -257,6 +304,8 @@ class DatabricksCredentials(Credentials):
 
     @property
     def unique_field(self) -> str:
+        if self.is_session_mode and not self.host:
+            return SESSION_METHOD
         return cast(str, self.host)
 
     def connection_info(self, *, with_aliases: bool = False) -> Iterable[tuple[str, Any]]:
@@ -282,11 +331,12 @@ class DatabricksCredentials(Credentials):
         #
         # Thus, if `with_aliases` is `True`, `DatabricksCredentials._connection_keys` should return
         # the internal key names; otherwise it can use aliases to show in `dbt debug`.
-        connection_keys = ["host", "http_path", "schema"]
+        connection_keys = ["method"] if self.is_session_mode else ["host", "http_path"]
         if with_aliases:
-            connection_keys.insert(2, "database")
+            connection_keys.append("database")
         elif self.database:
-            connection_keys.insert(2, "catalog")
+            connection_keys.append("catalog")
+        connection_keys.append("schema")
         if self.session_properties:
             connection_keys.append("session_properties")
         return tuple(connection_keys)
@@ -301,7 +351,7 @@ class DatabricksCredentials(Credentials):
 
     @property
     def cluster_id(self) -> Optional[str]:
-        return self.extract_cluster_id(self.http_path)  # type: ignore[arg-type]
+        return self.extract_cluster_id(self.http_path or "")
 
     def authenticate(self) -> "DatabricksCredentialManager":
         self.validate_creds()

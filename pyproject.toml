@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dbt-databricks"
+name = "dbt-databricks-alt"
 dynamic = ["version"]
-description = "The Databricks adapter plugin for dbt"
+description = "Unofficial fork of the Databricks adapter plugin for dbt, adding session mode for job clusters"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -35,11 +35,11 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://github.com/databricks/dbt-databricks"
-changelog = "https://github.com/databricks/dbt-databricks/blob/main/CHANGELOG.md"
+homepage = "https://github.com/ozolins/dbt-databricks-alt"
+changelog = "https://github.com/ozolins/dbt-databricks-alt/blob/main/CHANGELOG.md"
 documentation = "https://docs.getdbt.com/reference/resource-configs/databricks-configs"
-issues = "https://github.com/databricks/dbt-databricks/issues"
-repository = "https://github.com/databricks/dbt-databricks"
+issues = "https://github.com/ozolins/dbt-databricks-alt/issues"
+repository = "https://github.com/ozolins/dbt-databricks-alt"
 
 [tool.uv]
 required-version = "==0.11.18"
@@ -79,14 +79,14 @@ dependencies = ["wheel", "twine", "check-wheel-contents"]
 check-all = ["- check-wheel", "- check-sdist"]
 check-wheel = [
     "twine check dist/*",
-    "find ./dist/dbt_databricks-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
-    "pip freeze | grep dbt-databricks",
+    "find ./dist/dbt_databricks_alt-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-databricks-alt",
     "dbt parse --project-dir tests/min_deps_smoke --profiles-dir tests/min_deps_smoke",
 ]
 check-sdist = [
     "check-wheel-contents dist/*.whl --ignore W007,W008",
-    "find ./dist/dbt_databricks-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
-    "pip freeze | grep dbt-databricks",
+    "find ./dist/dbt_databricks_alt-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-databricks-alt",
     "dbt parse --project-dir tests/min_deps_smoke --profiles-dir tests/min_deps_smoke",
 ]
 
@@ -103,15 +103,15 @@ check-all = ["- check-wheel", "- check-sdist"]
 check-wheel = [
     "install-lock",
     "twine check dist/*",
-    "find ./dist/dbt_databricks-*.whl -maxdepth 1 -type f | xargs python -m pip install --no-deps --force-reinstall --find-links=dist/",
-    "pip freeze | grep dbt-databricks",
+    "find ./dist/dbt_databricks_alt-*.whl -maxdepth 1 -type f | xargs python -m pip install --no-deps --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-databricks-alt",
     "dbt parse --project-dir tests/min_deps_smoke --profiles-dir tests/min_deps_smoke",
 ]
 check-sdist = [
     "install-lock",
     "check-wheel-contents dist/*.whl --ignore W007,W008",
-    "find ./dist/dbt_databricks-*.gz -maxdepth 1 -type f | xargs python -m pip install --no-deps --force-reinstall --find-links=dist/",
-    "pip freeze | grep dbt-databricks",
+    "find ./dist/dbt_databricks_alt-*.gz -maxdepth 1 -type f | xargs python -m pip install --no-deps --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-databricks-alt",
     "dbt parse --project-dir tests/min_deps_smoke --profiles-dir tests/min_deps_smoke",
 ]
 

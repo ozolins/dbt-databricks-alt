@@ -2,6 +2,8 @@
 
 ### Features
 
+- **dbt-databricks-alt only:** Add `method: session` to run SQL and Python models on the SparkSession of the Databricks cluster that dbt runs on, so a whole project can run on a job cluster without a SQL warehouse (see upstream [#575](https://github.com/databricks/dbt-databricks/issues/575))
+- **dbt-databricks-alt only:** Publish as `dbt-databricks-alt` and identify to Databricks with the `dbt-databricks-alt/<version>` user agent
 - Accept `use_materialization_v2` as a model config, so a project or an individual table or incremental model can choose between the atomic `CREATE OR REPLACE TABLE … AS SELECT` path and the create-then-insert path; models that don't set it follow the `use_materialization_v2` behavior flag, and view models ignore it ([#1718](https://github.com/databricks/dbt-databricks/pull/1718))
 
 ### Fixes

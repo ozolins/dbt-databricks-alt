@@ -38,7 +38,7 @@ from dbt.adapters.databricks.logging import logger
 
 DEFAULT_POLLING_INTERVAL = 10
 SUBMISSION_LANGUAGE = "python"
-USER_AGENT = f"dbt-databricks/{version}"
+USER_AGENT = f"dbt-databricks-alt/{version}"
 LIBRARY_VALID_STATUSES = {"INSTALLED", "RESTORED", "SKIPPED"}
 
 

@@ -54,6 +54,12 @@ from dbt.adapters.databricks.handle import (
 )
 from dbt.adapters.databricks.logging import logger
 from dbt.adapters.databricks.python_models.run_tracking import PythonRunTracker
+from dbt.adapters.databricks.session import (
+    DatabricksSessionHandle,
+    SessionRunTracker,
+    detect_dbr_version,
+    get_root_spark_session,
+)
 from dbt.adapters.databricks.spog.decision import check_spog_preconditions
 from dbt.adapters.databricks.telemetry import hooks as telemetry_hooks
 from dbt.adapters.databricks.utils import QueryTagsUtils, is_cluster_http_path, redact_credentials
@@ -226,8 +232,10 @@ class DatabricksConnectionManager(SparkConnectionManager):
 
     def cancel_open(self) -> list[str]:
         cancelled = super().cancel_open()
-        logger.info("Cancelling open python jobs")
-        PythonRunTracker.cancel_runs(self.api_client)
+        SessionRunTracker.interrupt_all()
+        if cast(DatabricksCredentials, self.profile.credentials).has_api_access:
+            logger.info("Cancelling open python jobs")
+            PythonRunTracker.cancel_runs(self.api_client)
         return cancelled
 
     def compare_dbr_version(self, major: int, minor: int) -> int:
@@ -576,6 +584,74 @@ class DatabricksConnectionManager(SparkConnectionManager):
     def commit_if_has_connection(self) -> None:
         """Noop."""
         pass
+
+
+class DatabricksSessionConnectionManager(DatabricksConnectionManager):
+    """Runs dbt's SQL on SparkSessions of the Databricks cluster dbt is running on."""
+
+    CAPABILITIES_CACHE_KEY = "session"
+
+    @property
+    def api_client(self) -> DatabricksApiClient:
+        credentials = cast(DatabricksCredentials, self.profile.credentials)
+        if not credentials.has_api_access:
+            raise DbtRuntimeError(
+                "This operation uses the Databricks REST API, which needs `host` and "
+                "credentials in the profile when using `method: session`."
+            )
+        return super().api_client
+
+    def is_cluster(self) -> bool:
+        return True
+
+    def _create_fresh_connection(
+        self, conn_name: str, query_header_context: QueryContextWrapper
+    ) -> DatabricksDBTConnection:
+        if query_header_context.compute_name:
+            raise DbtRuntimeError(
+                f"`databricks_compute` is not supported with `method: session`, "
+                f"relation: {query_header_context.relation_name}"
+            )
+        return super()._create_fresh_connection(conn_name, query_header_context)
+
+    @classmethod
+    def _get_capabilities_for_http_path(cls, http_path: str) -> DBRCapabilities:
+        return cls._dbr_capabilities_cache.get(cls.CAPABILITIES_CACHE_KEY, DBRCapabilities())
+
+    @classmethod
+    def _cache_dbr_capabilities(cls, creds: DatabricksCredentials, http_path: str) -> None:
+        if cls.CAPABILITIES_CACHE_KEY not in cls._dbr_capabilities_cache:
+            cls._dbr_capabilities_cache[cls.CAPABILITIES_CACHE_KEY] = DBRCapabilities(
+                dbr_version=detect_dbr_version(get_root_spark_session()),
+                is_sql_warehouse=False,
+            )
+
+    @classmethod
+    def open(cls, connection: Connection) -> Connection:
+        databricks_connection = cast(DatabricksDBTConnection, connection)
+
+        if connection.state == ConnectionState.OPEN:
+            return connection
+
+        creds: DatabricksCredentials = connection.credentials
+        creds.validate_creds()
+
+        def connect() -> DatabricksSessionHandle:
+            handle = DatabricksSessionHandle.create(creds)
+            databricks_connection.session_id = handle.session_id
+            cls._cache_dbr_capabilities(creds, databricks_connection.http_path)
+            databricks_connection.capabilities = cls._get_capabilities_for_http_path(
+                databricks_connection.http_path
+            )
+            return handle
+
+        return cls.retry_connection(
+            connection,
+            connect=connect,
+            logger=logger,
+            retryable_exceptions=[],
+            retry_limit=0,
+        )
 
 
 class QueryConfigUtils:

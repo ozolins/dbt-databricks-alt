@@ -12,7 +12,7 @@ class GlobalState:
     __invocation_env: ClassVar[Optional[str]] = None
     __invocation_env_set: ClassVar[bool] = False
 
-    USER_AGENT = f"dbt-databricks/{__version__}"
+    USER_AGENT = f"dbt-databricks-alt/{__version__}"
 
     @classmethod
     def get_invocation_env(cls) -> Optional[str]:

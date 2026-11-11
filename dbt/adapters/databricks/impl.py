@@ -51,8 +51,9 @@ from dbt.adapters.databricks.column import DatabricksColumn
 from dbt.adapters.databricks.connections import (
     DatabricksConnectionManager,
     DatabricksDBTConnection,
+    DatabricksSessionConnectionManager,
 )
-from dbt.adapters.databricks.credentials import DatabricksCredentials
+from dbt.adapters.databricks.credentials import SESSION_METHOD, DatabricksCredentials
 from dbt.adapters.databricks.dbr_capabilities import DBRCapabilities, DBRCapability
 from dbt.adapters.databricks.global_state import GlobalState
 from dbt.adapters.databricks.handle import SqlUtils
@@ -61,6 +62,7 @@ from dbt.adapters.databricks.python_models.python_submissions import (
     AllPurposeClusterPythonJobHelper,
     JobClusterPythonJobHelper,
     ServerlessClusterPythonJobHelper,
+    SessionPythonJobHelper,
     WorkflowPythonJobHelper,
 )
 from dbt.adapters.databricks.record.record_types import (
@@ -297,6 +299,8 @@ class DatabricksAdapter(SparkAdapter):
     get_column_behavior: GetColumnsBehavior
 
     def __init__(self, config: Any, mp_context: SpawnContext) -> None:
+        if self._is_session_mode(config.credentials):
+            self.ConnectionManager = DatabricksSessionConnectionManager
         super().__init__(config, mp_context)
 
         # dbt doesn't propogate flags for certain workflows like dbt debug so this requires
@@ -321,10 +325,14 @@ class DatabricksAdapter(SparkAdapter):
             "has_dbr_capability": self._has_dbr_capability_parse,
         }
 
+    @staticmethod
+    def _is_session_mode(credentials: Any) -> bool:
+        return isinstance(credentials, DatabricksCredentials) and credentials.is_session_mode
+
     def _has_dbr_capability_parse(self, capability_name: str) -> bool:
         """Parse-time stub: True only on SQL warehouses for warehouse-supported capabilities."""
         creds = self.config.credentials
-        if is_cluster_http_path(creds.http_path, creds.cluster_id):
+        if self._is_session_mode(creds) or is_cluster_http_path(creds.http_path, creds.cluster_id):
             return False
         try:
             capability = DBRCapability(capability_name.lower())
@@ -999,7 +1007,14 @@ class DatabricksAdapter(SparkAdapter):
             "all_purpose_cluster": AllPurposeClusterPythonJobHelper,
             "serverless_cluster": ServerlessClusterPythonJobHelper,
             "workflow_job": WorkflowPythonJobHelper,
+            SESSION_METHOD: SessionPythonJobHelper,
         }
+
+    @property
+    def default_python_submission_method(self) -> str:
+        if self._is_session_mode(self.config.credentials):
+            return SESSION_METHOD
+        return super().default_python_submission_method
 
     @log_code_execution
     def submit_python_job(self, parsed_model: dict, compiled_code: str) -> AdapterResponse:
@@ -1007,6 +1022,15 @@ class DatabricksAdapter(SparkAdapter):
             "user_folder_for_python",
             self.behavior.use_user_folder_for_python.setting,  # type: ignore[attr-defined]
         )
+        creds = self.config.credentials
+        if self._is_session_mode(creds) and not creds.has_api_access:
+            submission_method = parsed_model["config"].get("submission_method", SESSION_METHOD)
+            if submission_method != SESSION_METHOD:
+                raise DbtConfigError(
+                    f"The `{submission_method}` submission method uses the Databricks REST API, "
+                    "which needs `host` and credentials in the profile when using "
+                    "`method: session`."
+                )
         return super().submit_python_job(parsed_model, compiled_code)
 
     @available
@@ -1306,9 +1330,12 @@ class RelationAPIBase(ABC, Generic[DatabricksRelationConfig]):
             )
 
         entity_name = f"{relation.database}.{relation.schema}.{relation.identifier}"
-        tags = adapter.connections.api_client.entity_tag_assignments.list_table_tags(entity_name)
-        if tags is not None:
-            return tags
+        if adapter.config.credentials.has_api_access:
+            tags = adapter.connections.api_client.entity_tag_assignments.list_table_tags(
+                entity_name
+            )
+            if tags is not None:
+                return tags
 
         # Tokens scoped to `sql` can query information_schema but not the Unity Catalog API.
         table = adapter.execute_macro("fetch_tags", kwargs={"relation": relation})
@@ -1342,9 +1369,15 @@ class DeltaLiveTableAPIBase(RelationAPIBase[DatabricksRelationConfig]):
         # Ensure any current refreshes are completed before returning the relation config
         tblproperties = cast(TblPropertiesConfig, relation_config.config["tblproperties"])
         if tblproperties.pipeline_id:
-            adapter.connections.api_client.dlt_pipelines.poll_for_completion(
-                tblproperties.pipeline_id
-            )
+            if adapter.config.credentials.has_api_access:
+                adapter.connections.api_client.dlt_pipelines.poll_for_completion(
+                    tblproperties.pipeline_id
+                )
+            else:
+                logger.warning(
+                    f"Not waiting for in-progress refreshes of {relation}: that needs `host` "
+                    "and credentials in the profile when using `method: session`."
+                )
         return relation_config
 
 

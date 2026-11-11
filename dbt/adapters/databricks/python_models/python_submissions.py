@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from dbt.adapters.base import PythonJobHelper
-from dbt_common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtConfigError, DbtRuntimeError
 from pydantic import BaseModel
 from typing_extensions import override
 
@@ -14,6 +14,7 @@ from dbt.adapters.databricks.python_models.python_config import (
     PythonPackagesConfig,
 )
 from dbt.adapters.databricks.python_models.run_tracking import PythonRunTracker
+from dbt.adapters.databricks.session import create_spark_session, run_python_model
 
 DEFAULT_TIMEOUT = 60 * 60 * 24
 NOTEBOOK_SEPARATOR = "\n\n# COMMAND ----------\n\n"
@@ -727,4 +728,31 @@ class WorkflowPythonJobHelper(BaseDatabricksHelper):
     def build_submitter(self) -> PythonSubmitter:
         return PythonNotebookWorkflowSubmitter.create(
             self.api_client, self.tracker, self.parsed_model
+        )
+
+
+class SessionPythonJobHelper(PythonJobHelper):
+    """Runs Python models in-process on the cluster dbt is running on, with `method: session`."""
+
+    def __init__(self, parsed_model: dict, credentials: DatabricksCredentials) -> None:
+        self.parsed_model = ParsedPythonModel(**parsed_model)
+        if not credentials.is_session_mode:
+            raise DbtConfigError(
+                "The `session` submission method requires `method: session` in the profile."
+            )
+        config = self.parsed_model.config
+        if config.packages or config.additional_libs or config.environment_dependencies:
+            logger.warning(
+                f"Ignoring the libraries configured for {self.parsed_model.identifier}: the "
+                "`session` submission method runs on the cluster running dbt, so install them "
+                "as libraries of that cluster."
+            )
+        self.spark = create_spark_session(credentials)
+
+    def submit(self, compiled_code: str) -> None:
+        run_python_model(
+            self.spark,
+            compiled_code,
+            timeout=self.parsed_model.config.timeout,
+            name=self.parsed_model.identifier,
         )

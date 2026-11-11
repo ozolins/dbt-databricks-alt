@@ -360,10 +360,10 @@ class TestDatabricksAdapter(DatabricksAdapterBase):
             if expected_invocation_env is not None:
                 assert (
                     _user_agent_entry
-                    == f"dbt-databricks/{__version__.version}; {expected_invocation_env}"
+                    == f"dbt-databricks-alt/{__version__.version}; {expected_invocation_env}"
                 )
             else:
-                assert _user_agent_entry == f"dbt-databricks/{__version__.version}"
+                assert _user_agent_entry == f"dbt-databricks-alt/{__version__.version}"
             if expected_http_headers is None:
                 assert http_headers is None
             else:

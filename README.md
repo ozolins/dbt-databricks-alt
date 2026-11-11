@@ -1,15 +1,18 @@
-<p align="center">
-  <img src="https://bynder-public-us-west-2.s3.amazonaws.com/styleguide/ABB317701CA31CB7F29268E32B303CAE-pdf-column-1.png" alt="databricks logo" width="50%" />
-  <img src="https://raw.githubusercontent.com/dbt-labs/dbt/ec7dee39f793aa4f7dd3dae37282cc87664813e4/etc/dbt-logo-full.svg" alt="dbt logo" width="250"/>
-</p>
-<p align="center">
-  <a href="https://github.com/databricks/dbt-databricks/actions/workflows/main.yml">
-    <img src="https://github.com/databricks/dbt-databricks/actions/workflows/main.yml/badge.svg?event=push" alt="Unit Tests Badge"/>
-  </a>
-  <a href="https://github.com/databricks/dbt-databricks/actions/workflows/integration.yml">
-    <img src="https://github.com/databricks/dbt-databricks/actions/workflows/integration.yml/badge.svg?event=push" alt="Integration Tests Badge"/>
-  </a>
-</p>
+# dbt-databricks-alt
+
+> **Unofficial fork.** `dbt-databricks-alt` is a community fork of
+> [`dbt-databricks`](https://github.com/databricks/dbt-databricks). It is not affiliated with,
+> endorsed by, or supported by Databricks or dbt Labs.
+
+It adds [session mode](docs/guides/session-mode.md) (`method: session`), which runs SQL and Python
+models on the SparkSession of the Databricks cluster that dbt runs on, so a whole project can run
+on a job cluster without a SQL warehouse.
+
+It is a drop-in replacement: profiles keep `type: databricks`. Because it installs the same Python
+modules as `dbt-databricks`, the two cannot be installed together; uninstall `dbt-databricks`
+first, and note that any package depending on `dbt-databricks` will reinstall the official one.
+
+The rest of this README is the upstream documentation.
 
 **[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
 
@@ -37,13 +40,14 @@ If you are developing a dbt project on Databricks, we recommend using `dbt-datab
 Install using pip:
 
 ```nofmt
-pip install dbt-databricks
+pip uninstall dbt-databricks
+pip install dbt-databricks-alt
 ```
 
 Upgrade to the latest version
 
 ```nofmt
-pip install --upgrade dbt-databricks
+pip install --upgrade dbt-databricks-alt
 ```
 
 ### Profile Setup
@@ -77,6 +81,7 @@ These following quick starts will get you up and running with the `dbt-databrick
 - [Submitting Python models as Databricks Workflows](https://github.com/databricks/dbt-databricks/blob/main/docs/guides/workflow-job-submission.md)
 - [Configuring serverless environments for Python models](https://github.com/databricks/dbt-databricks/blob/main/docs/guides/workflow-job-submission.md#serverless-environments)
 - [Running a dbt project as a Databricks job](https://github.com/databricks/dbt-databricks/blob/main/docs/guides/databricks-jobs.md)
+- [Running dbt on a job cluster with session mode](https://github.com/ozolins/dbt-databricks-alt/blob/main/docs/guides/session-mode.md)
 - [Using Unity Catalog with dbt-databricks](https://github.com/databricks/dbt-databricks/blob/main/docs/guides/uc.md)
 - [Continuous integration in dbt](https://docs.getdbt.com/docs/deploy/continuous-integration)
 - [Loading data from S3 into Delta using the databricks_copy_into macro](https://github.com/databricks/dbt-databricks/blob/main/docs/guides/databricks-copy-into-macro-aws.md)

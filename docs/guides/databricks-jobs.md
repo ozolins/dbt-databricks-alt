@@ -1,6 +1,6 @@
 # Running a dbt project as a job in Databricks Jobs
 
-_Last updated: 2026-08-09_
+_Last updated: 2026-11-11_
 
 Databricks Lakeflow Jobs is a managed orchestrator that lets you author and schedule DAGs of notebooks, Python scripts, and dbt projects as production jobs.
 
@@ -22,7 +22,8 @@ When you run a dbt project as a Databricks Job, the dbt CLI runs on a single-nod
 
 Note: previously dbt tasks on Databricks Jobs could target jobs clusters for compute.
 That is [no longer supported](https://docs.databricks.com/en/workflows/jobs/how-to/use-dbt-in-workflows.html#advanced-run-dbt-with-a-custom-profile).
-Job clusters can only be used for running the dbt-cli.
+Job clusters can only be used for running the dbt-cli. To run models on a job cluster, run dbt from
+a notebook, Python script or Python wheel task with [session mode](session-mode.md) instead.
 
 # Run dbt as a production job
 

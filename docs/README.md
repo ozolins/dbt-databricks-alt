@@ -1,6 +1,6 @@
 # dbt-databricks docs
 
-_Last updated: 2026-08-09_
+_Last updated: 2026-11-11_
 
 Internal documentation for the dbt-databricks adapter, grouped by purpose. For user-facing config
 reference, see the [dbt docs](https://docs.getdbt.com/reference/resource-configs/databricks-configs).
@@ -31,6 +31,8 @@ drift; treat them as starting points, not authoritative reference.
 - **[guides/uc.md](guides/uc.md)** — using dbt-databricks with Unity Catalog.
 - **[guides/databricks-jobs.md](guides/databricks-jobs.md)** — running a dbt project as a Databricks
   job.
+- **[guides/session-mode.md](guides/session-mode.md)** — running SQL and Python models on the
+  SparkSession of a job cluster with `method: session`.
 - **[guides/workflow-job-submission.md](guides/workflow-job-submission.md)** — submitting Python
   models as long-lived Databricks Workflows, including serverless environment configuration.
 - **[guides/databricks-copy-into-macro-aws.md](guides/databricks-copy-into-macro-aws.md)** — loading

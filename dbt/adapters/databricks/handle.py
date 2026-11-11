@@ -346,7 +346,7 @@ class SqlUtils:
         r"(?P<after> *(?:#[^\n]*)?)$",
         re.MULTILINE,
     )
-    user_agent = f"dbt-databricks/{__version__}"
+    user_agent = f"dbt-databricks-alt/{__version__}"
 
     @staticmethod
     def extract_dbr_version(version: str) -> tuple[int, int]:
