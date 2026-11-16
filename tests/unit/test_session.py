@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
+from databricks.sql.exc import DatabaseError
 from dbt_common.exceptions import DbtRuntimeError
 
 from dbt.adapters.databricks.credentials import DatabricksCredentials
@@ -60,6 +61,16 @@ def _connect_spark():
 
 def _session_credentials(**kwargs):
     return DatabricksCredentials(method="session", schema="analytics", **kwargs)
+
+
+class SparkError(Exception):
+    """Built from keywords like PySpark's errors, so `args` is empty."""
+
+    def __init__(self, *, desc):
+        self.desc = desc
+
+    def __str__(self):
+        return self.desc
 
 
 class TestRenderBindings:
@@ -169,6 +180,20 @@ class TestDatabricksSessionHandle:
 
         with pytest.raises(DbtRuntimeError, match="closed connection"):
             handle.execute("select 1")
+
+    @pytest.mark.parametrize("fails_on", ["sql", "collect"])
+    def test_execute_raises_spark_errors_as_sql_connector_errors(self, fails_on):
+        spark = _classic_spark()
+        error = SparkError(desc="[TABLE_OR_VIEW_NOT_FOUND] `t` cannot be found")
+        if fails_on == "sql":
+            spark.sql.side_effect = error
+        else:
+            spark.sql.return_value.collect.side_effect = error
+
+        with pytest.raises(DatabaseError, match="TABLE_OR_VIEW_NOT_FOUND") as exc_info:
+            DatabricksSessionHandle(spark).execute("select * from t")
+
+        assert exc_info.value.__cause__ is error
 
     def test_list_tables_excludes_temporary_views_and_leaves_type_unresolved(self):
         spark = _classic_spark()

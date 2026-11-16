@@ -8,7 +8,7 @@ It is not affiliated with, endorsed by, or supported by Databricks or dbt Labs.
 
 ## Changes from upstream
 
-Version 1.13.100 is based on `dbt-databricks` 1.13.0 (`main` at commit `31edf7fc`), with these
+Version 1.13.101 is based on `dbt-databricks` 1.13.0 (`main` at commit `31edf7fc`), with these
 changes:
 
 - Added session mode (`method: session`): `dbt/adapters/databricks/session.py`, and changes to

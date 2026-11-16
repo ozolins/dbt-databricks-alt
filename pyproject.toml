@@ -9,7 +9,7 @@ description = "Unofficial fork of the Databricks adapter plugin for dbt, adding 
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
-authors = [{ name = "Databricks", email = "feedback@databricks.com" }]
+authors = [{ name = "Gatis Ozolins", email = "g.ozolins@scandicfusion.com" }]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: Apache Software License",

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt_common.exceptions import DbtRuntimeError
 
+from databricks.sql.exc import DatabaseError
 from databricks.sql.utils import ParamEscaper, inject_parameters
 from dbt.adapters.databricks.credentials import (
     DATABRICKS_RUNTIME_VERSION_ENV,
@@ -420,8 +421,13 @@ class DatabricksSessionHandle:
             raise DbtRuntimeError("Attempting to execute on a closed connection")
         if self._cursor:
             self._cursor.close()
-        with self._job_tag.applied():
-            self._cursor = op()
+        try:
+            with self._job_tag.applied():
+                self._cursor = op()
+        except Exception as exc:
+            # PySpark errors have empty `args`, which `exception_handler` re-raises untranslated;
+            # it turns the SQL connector's error type into a DbtDatabaseError.
+            raise DatabaseError(str(exc)) from exc
         return self._cursor
 
     def cancel(self) -> None:

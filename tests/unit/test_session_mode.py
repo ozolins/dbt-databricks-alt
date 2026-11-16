@@ -5,7 +5,12 @@ from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from dbt.adapters.exceptions import FailedToConnectError
-from dbt_common.exceptions import DbtConfigError, DbtRuntimeError, DbtValidationError
+from dbt_common.exceptions import (
+    DbtConfigError,
+    DbtDatabaseError,
+    DbtRuntimeError,
+    DbtValidationError,
+)
 
 from dbt.adapters.databricks import DatabricksAdapter
 from dbt.adapters.databricks.connections import (
@@ -22,6 +27,9 @@ from dbt.adapters.databricks.dbr_capabilities import DBRCapability
 from dbt.adapters.databricks.impl import DeltaLiveTableAPIBase, RelationAPIBase
 from dbt.adapters.databricks.python_models.python_submissions import SessionPythonJobHelper
 from dbt.adapters.databricks.relation import DatabricksRelation
+from dbt.adapters.databricks.session import DatabricksSessionHandle
+from dbt.adapters.databricks.utils import handle_missing_objects
+from tests.unit.test_session import SparkError
 from tests.unit.utils import config_from_parts_or_dicts
 
 PROJECT = {
@@ -192,6 +200,25 @@ class TestSessionConnectionManager:
             connection = adapter.acquire_connection("model")
             with pytest.raises(FailedToConnectError, match="CATALOG_NOT_FOUND"):
                 connection.handle
+
+    def test_spark_errors_surface_as_database_errors(self, spark):
+        adapter = _adapter(method="session")
+        message = "[SCHEMA_NOT_FOUND] The schema `missing` cannot be found"
+        session = Mock()
+        session.sql.side_effect = SparkError(desc=message)
+
+        def list_tables():
+            return adapter.connections.list_tables("hive_metastore", "missing")
+
+        with patch(
+            "dbt.adapters.databricks.connections.DatabricksSessionHandle.create",
+            return_value=DatabricksSessionHandle(session),
+        ):
+            adapter.acquire_connection("model")
+            with pytest.raises(DbtDatabaseError) as exc_info:
+                list_tables()
+            assert exc_info.value.msg == message
+            assert handle_missing_objects(list_tables, "no tables") == "no tables"
 
     def test_rejects_databricks_compute(self, spark):
         connections = _adapter(method="session").connections
